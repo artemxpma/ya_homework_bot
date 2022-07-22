@@ -50,7 +50,8 @@ logger.addHandler(str_handler)
 
 def send_message(bot, message):
     """
-    Отправляет сообщение в чат телеграм, в случае возникновения любых ошибок
+    Отправляет сообщение в чат телеграм.
+    В случае возникновения любых ошибок
     ловит и записывает в лог.
     """
     try:
@@ -61,8 +62,8 @@ def send_message(bot, message):
 
 
 def get_api_answer(current_timestamp):
-    """
-    Опрашивает АПИ практикума и возвращает словарь, в случае возникновнеия
+    """Опрашивает АПИ практикума и возвращает словарь.
+    В случае возникновнеия
     ошибок выбрасывает эксепшн ConnetctionError.
     """
     timestamp = current_timestamp or int(time.time())
@@ -78,9 +79,8 @@ def get_api_answer(current_timestamp):
 
 
 def check_response(response):
-    """
-    Проверяет корректность ответа АПИ и наличие ключа homeworks,
-    возвращает значение словаря по ключу homeworks.
+    """Проверяет корректность ответа АПИ и наличие ключа homeworks.
+    Возвращает значение словаря по ключу homeworks.
     """
     # if not isinstance(response, dict):
     #     raise TypeError('API response cant be resolved into dict')
@@ -93,9 +93,8 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """
-    Проверяет наличие обновлений статуса проверки домашней работы,
-    если статус не известен выбрасывает эксепшен.
+    """Проверяет наличие обновлений статуса проверки домашней работы.
+    Если статус не известен выбрасывает эксепшен.
     """
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
@@ -106,9 +105,8 @@ def parse_status(homework):
 
 
 def check_tokens():
-    """
-    Проверяет наличие переменных окружения,
-    в случае отсутствия выбрасывает соответствующий эксепшн.
+    """Проверяет наличие переменных окружения.
+    В случае отсутствия выбрасывает соответствующий эксепшн.
     """
     tokens = (PRACTICUM_TOKEN,
               TELEGRAM_TOKEN,
