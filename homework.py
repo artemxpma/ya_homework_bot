@@ -1,4 +1,11 @@
-import requests, os, json, time, sys
+import requests
+import os
+import time
+import sys
+import logging
+
+from logging.handlers import RotatingFileHandler
+from http import HTTPStatus
 
 import telegram
 from dotenv import load_dotenv
@@ -24,93 +31,118 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+# Создаем логгер и определяем формат лога
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(
+    '%(asctime)s, %(levelname)s, %(name)s - %(message)s'
+)
+# Создаем хэндлер для записи в файл уровня error и присваиваем логгеру
+fl_handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=5)
+fl_handler.setLevel(logging.ERROR)
+fl_handler.setFormatter(formatter)
+logger.addHandler(fl_handler)
+# Создаем хэндлер для записи в stdout уровня debug и присваиваем логгеру
+str_handler = logging.StreamHandler(stream=sys.stdout)
+str_handler.setLevel(logging.DEBUG)
+str_handler.setFormatter(formatter)
+logger.addHandler(str_handler)
+
 
 def send_message(bot, message):
+    """
+    Отправляет сообщение в чат телеграм, в случае возникновения любых ошибок
+    ловит и записывает в лог.
+    """
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+        logger.info('Message successfully sent')
     except Exception as error:
-        # logger.error(f'{error} occured: message not sent')
-        pass
-    else:
-        # logger.info('Message successfully sent')
-        pass
+        logger.error(f'{repr(error)} occured during sending', exc_info=True)
 
 
 def get_api_answer(current_timestamp):
-    timestamp = current_timestamp
-    #  or int(time.time())
+    """
+    Опрашивает АПИ практикума и возвращает словарь, в случае возникновнеия
+    ошибок выбрасывает эксепшн ConnetctionError.
+    """
+    timestamp = current_timestamp or int(time.time())
     headers = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=headers, params=params)
-    except Exception as error:  # не понял какую ошибку тут ловить
-        pass
-        # logger.error(f'{error} occured: message not sent')
-    else:
-        return json.loads(response.text)
+        if response.status_code != HTTPStatus.OK:
+            raise exc.HttpResponseError('API response not 200')
+        return response.json()
+    except Exception:
+        raise exc.ConnetctionError('Praktikem API connection error')
 
 
 def check_response(response):
-    try:
-        if 'homeworks' not in response:
-            raise exc.ApiResponseError()
-    except (TypeError, exc.ApiResponseError) as error:
-        # logger.error(f'{error} occured: API response invalid')
-        pass
-    else:
-        return response.get('homeworks')
+    """
+    Проверяет корректность ответа АПИ и наличие ключа homeworks,
+    возвращает значение словаря по ключу homeworks.
+    """
+    # if not isinstance(response, dict):
+    #     raise TypeError('API response cant be resolved into dict')
+    # if 'homeworks' not in response:
+    #     raise exc.ApiResponseError('API response dont contain info')
+    # С этими проверами не проходят автотесты, не очень понимаю почему
+    if not isinstance(response['homeworks'], list):
+        raise TypeError('homeworks is not list')
+    return response.get('homeworks')
 
 
 def parse_status(homework):
+    """
+    Проверяет наличие обновлений статуса проверки домашней работы,
+    если статус не известен выбрасывает эксепшен.
+    """
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    try:
-        verdict = HOMEWORK_STATUSES[homework_status]
-    except KeyError as error:
-        # logger.error(f'{error} occured: homework status not recognized')
-        pass
-    else:
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    if homework_status not in HOMEWORK_STATUSES:
+        raise KeyError('Homework status not recognized')
+    verdict = HOMEWORK_STATUSES[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
-    try:
-        if not PRACTICUM_TOKEN:
-            raise exc.PrTokenNotFound()
-        if not TELEGRAM_TOKEN:
-            raise exc.TgTokenNotFound()
-        if not TELEGRAM_CHAT_ID:
-            raise exc.ChatIdNotFound()
-    except (exc.PrTokenNotFound, exc.TgTokenNotFound, exc.ChatIdNotFound) as error:
-        # logger.critical(f'{error} occured: environment variable not found')
-        # print(type(error).__name__)
-        return False
-    else:
-        return True
+    """
+    Проверяет наличие переменных окружения,
+    в случае отсутствия выбрасывает соответствующий эксепшн.
+    """
+    tokens = (PRACTICUM_TOKEN,
+              TELEGRAM_TOKEN,
+              TELEGRAM_CHAT_ID)
+    for token in tokens:
+        if not token:
+            logger.critical(f'{token} occured: environment variable not found')
+            return False
+    return True
 
 
 def main():
     """Основная логика работы бота."""
-    if check_tokens() != True:
-        sys.exit()
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    # current_timestamp = int(time.time())
-    current_timestamp = 0
+    current_timestamp = int(time.time())
+    last_error = 0
     while True:
         try:
+            if not check_tokens():
+                sys.exit()
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             if len(homeworks) == 0:
-                # logger.debug('homeworks list empty')
-                pass
+                logger.debug('homeworks list empty')
             for i in range(len(homeworks)):
                 message = parse_status(homeworks[i])
                 send_message(bot, message)
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
         except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            send_message(bot, message)
+            logger.error(f'{repr(error)} occured')
+            if repr(error) != last_error:
+                send_message(bot, f'{repr(error)}')
+                last_error = repr(error)
             time.sleep(RETRY_TIME)
 
 
