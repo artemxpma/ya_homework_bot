@@ -3,14 +3,13 @@ import os
 import time
 import sys
 import logging
-
-from logging.handlers import RotatingFileHandler
 from http import HTTPStatus
 
-import telegram
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
+import telegram
 
-import exceptions as exc
+from . import exceptions as exc
 
 
 load_dotenv()
@@ -57,7 +56,7 @@ def send_message(bot, message):
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logger.info('Message successfully sent')
-    except Exception as error:
+    except telegram.TelegramError as error:
         logger.error(f'{repr(error)} occured during sending', exc_info=True)
 
 
@@ -75,7 +74,7 @@ def get_api_answer(current_timestamp):
             raise exc.HttpResponseError('API response not 200')
         return response.json()
     except Exception:
-        raise exc.ConnetctionError('Praktikem API connection error')
+        raise exc.ConnetctionError('Praktikum API connection error')
 
 
 def check_response(response):
@@ -96,6 +95,8 @@ def parse_status(homework):
     """Проверяет наличие обновлений статуса проверки домашней работы.
     Если статус не известен выбрасывает эксепшен.
     """
+    if 'homework_name' not in homework:
+        raise KeyError('"Homework" dictionary do not contain homework')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_STATUSES:
@@ -137,10 +138,11 @@ def main():
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
         except Exception as error:
-            logger.error(f'{repr(error)} occured')
-            if repr(error) != last_error:
-                send_message(bot, f'{repr(error)}')
-                last_error = repr(error)
+            error_message = repr(error)
+            logger.error(f'{error_message} occured')
+            if error_message != last_error:
+                send_message(bot, f'{error_message}')
+                last_error = error_message
             time.sleep(RETRY_TIME)
 
 
