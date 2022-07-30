@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import telegram
 
-from . import exceptions as exc
+# from . import exceptions as exc
 
 
 load_dotenv()
