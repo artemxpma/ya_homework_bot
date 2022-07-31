@@ -3,6 +3,7 @@ import os
 import time
 import sys
 import logging
+import json
 from http import HTTPStatus
 
 from logging.handlers import RotatingFileHandler
@@ -73,8 +74,10 @@ def get_api_answer(current_timestamp):
         if response.status_code != HTTPStatus.OK:
             raise exc.HttpResponseError('API response not 200')
         return response.json()
-    except Exception:
-        raise exc.ConnetctionError('Praktikum API connection error')
+    except json.decoder.JSONDecodeError as e:
+        raise exc.ConnetctionError(f'Praktikum API answer in not JSON: {e}')
+    except requests.exceptions.RequestException as e:
+        raise exc.ConnetctionError(f'Praktikum API connection error: {e}')
 
 
 def check_response(response):
