@@ -81,11 +81,10 @@ def check_response(response):
     """Проверяет корректность ответа АПИ и наличие ключа homeworks.
     Возвращает значение словаря по ключу homeworks.
     """
-    # if not isinstance(response, dict):
-    #     raise TypeError('API response cant be resolved into dict')
-    # if 'homeworks' not in response:
-    #     raise exc.ApiResponseError('API response dont contain info')
-    # С этими проверами не проходят автотесты, не очень понимаю почему
+    if not isinstance(response, dict):
+        raise TypeError('API response cant be resolved into dict')
+    if 'homeworks' not in response:
+        raise exc.ApiResponseError('API response dont contain homework info')
     if not isinstance(response['homeworks'], list):
         raise TypeError('homeworks is not list')
     return response.get('homeworks')
@@ -132,8 +131,8 @@ def main():
             homeworks = check_response(response)
             if len(homeworks) == 0:
                 logger.debug('homeworks list empty')
-            for i in range(len(homeworks)):
-                message = parse_status(homeworks[i])
+            for work in homeworks:
+                message = parse_status(work)
                 send_message(bot, message)
             current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
